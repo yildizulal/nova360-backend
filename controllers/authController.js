@@ -98,3 +98,42 @@ exports.loginAdmin = async (req, res) => {
         });
     }
 };
+
+exports.updateAdminPassword = async (req, res) => {
+    try {
+        const { email, newPassword } = req.body;
+
+        if (!email || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Email ve yeni şifre zorunludur.",
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        const user = await User.findOneAndUpdate(
+            { email },
+            { password: hashedPassword },
+            { new: true }
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "Kullanıcı bulunamadı.",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Admin şifresi güncellendi.",
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Şifre güncellenirken hata oluştu.",
+            error: error.message,
+        });
+    }
+};
