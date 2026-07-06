@@ -12,6 +12,7 @@ const seoReportRoutes = require("./routes/seoReportRoutes");
 const siteSettingsRoutes = require("./routes/siteSettingsRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const contactRoutes = require("./routes/contactRoutes");
+const newsletterRoutes = require("./routes/newsletterRoutes");
 
 const envPath = path.resolve(__dirname, ".env");
 console.log("ENV PATH:", envPath);
@@ -40,7 +41,8 @@ app.use(
     })
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
 app.get("/", (req, res) => {
     res.send("Nova API çalışıyor");
@@ -55,6 +57,7 @@ app.use("/api/settings", siteSettingsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/news", newsRoutes);
+app.use("/api/newsletters", newsletterRoutes);
 
 app.get("/api/test", (req, res) => {
     res.json({
