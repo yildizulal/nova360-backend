@@ -1,6 +1,6 @@
 const express = require("express");
 const multer = require("multer");
-const upload = multer({ storage: multer.memoryStorage() });
+
 
 const {
     createSubscriber,
@@ -13,11 +13,15 @@ const {
 
 const { protect } = require("../middleware/authMiddleware");
 
-router.post("/import", protect, upload.single("file"), importSubscribers);
 const router = express.Router();
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.post("/", createSubscriber);
 router.get("/", protect, getSubscribers);
+
+router.post("/import", protect, upload.single("file"), importSubscribers);
+
 router.put("/:id", protect, updateSubscriber);
 router.delete("/:id", protect, deleteSubscriber);
 
