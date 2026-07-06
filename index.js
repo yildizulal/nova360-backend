@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
+const subscriberRoutes = require("./routes/subscriberRoutes");
 const authRoutes = require("./routes/authRoutes");
 const blogRoutes = require("./routes/blogRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -58,6 +59,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/news", newsRoutes);
 app.use("/api/newsletters", newsletterRoutes);
+app.use("/api/subscribers", subscriberRoutes);
 
 app.get("/api/test", (req, res) => {
     res.json({
