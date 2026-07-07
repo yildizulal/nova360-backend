@@ -54,31 +54,47 @@ exports.getSubscribers = async (req, res) => {
         const page = Number(req.query.page) || 1;
         const limit = Number(req.query.limit) || 15;
         const search = req.query.search || "";
+        const status = req.query.status || "all";
 
-        const query = search
-            ? {
-                $or: [
-                    { name: { $regex: search, $options: "i" } },
-                    { email: { $regex: search, $options: "i" } },
-                    { company: { $regex: search, $options: "i" } },
-                    { sector: { $regex: search, $options: "i" } },
-                ],
-            }
-            : {};
+        const query = {};
+
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: "i" } },
+                { email: { $regex: search, $options: "i" } },
+                { company: { $regex: search, $options: "i" } },
+                { sector: { $regex: search, $options: "i" } },
+            ];
+        }
+
+        if (status !== "all") {
+            query.status = status;
+        }
 
         const total = await Subscriber.countDocuments(query);
 
-        const subscribers = await Subscriber.find(query)
-            .sort({ createdAt: -1 })
-            .skip((page - 1) * limit)
-            .limit(limit);
+        const [totalAll, activeTotal, passiveTotal, unsubscribedTotal, subscribers] =
+            await Promise.all([
+                Subscriber.countDocuments(),
+                Subscriber.countDocuments({ status: "active" }),
+                Subscriber.countDocuments({ status: "passive" }),
+                Subscriber.countDocuments({ status: "unsubscribed" }),
+                Subscriber.find(query)
+                    .sort({ createdAt: -1 })
+                    .skip((page - 1) * limit)
+                    .limit(limit),
+            ]);
 
         res.status(200).json({
             success: true,
             count: subscribers.length,
             total,
+            totalAll,
+            activeTotal,
+            passiveTotal,
+            unsubscribedTotal,
             page,
-            totalPages: Math.ceil(total / limit),
+            totalPages: Math.ceil(total / limit) || 1,
             subscribers,
         });
     } catch (error) {
