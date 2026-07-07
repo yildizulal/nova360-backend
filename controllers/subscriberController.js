@@ -1,13 +1,27 @@
 const Subscriber = require("../models/Subscriber");
 const XLSX = require("xlsx");
 
+const getValue = (row, keys) => {
+    for (const key of keys) {
+        if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
+            return row[key];
+        }
+    }
+    return "";
+};
+
 exports.createSubscriber = async (req, res) => {
     try {
         const email = req.body.email?.trim().toLowerCase();
 
-        const existingSubscriber = await Subscriber.findOne({
-            email,
-        });
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "E-posta zorunludur.",
+            });
+        }
+
+        const existingSubscriber = await Subscriber.findOne({ email });
 
         if (existingSubscriber) {
             return res.status(400).json({
@@ -37,11 +51,34 @@ exports.createSubscriber = async (req, res) => {
 
 exports.getSubscribers = async (req, res) => {
     try {
-        const subscribers = await Subscriber.find().sort({ createdAt: -1 });
+        const page = Number(req.query.page) || 1;
+        const limit = Number(req.query.limit) || 15;
+        const search = req.query.search || "";
+
+        const query = search
+            ? {
+                $or: [
+                    { name: { $regex: search, $options: "i" } },
+                    { email: { $regex: search, $options: "i" } },
+                    { company: { $regex: search, $options: "i" } },
+                    { sector: { $regex: search, $options: "i" } },
+                ],
+            }
+            : {};
+
+        const total = await Subscriber.countDocuments(query);
+
+        const subscribers = await Subscriber.find(query)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit);
 
         res.status(200).json({
             success: true,
             count: subscribers.length,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit),
             subscribers,
         });
     } catch (error) {
@@ -55,6 +92,10 @@ exports.getSubscribers = async (req, res) => {
 
 exports.updateSubscriber = async (req, res) => {
     try {
+        if (req.body.email) {
+            req.body.email = req.body.email.trim().toLowerCase();
+        }
+
         const subscriber = await Subscriber.findByIdAndUpdate(
             req.params.id,
             req.body,
@@ -156,13 +197,17 @@ exports.importSubscribers = async (req, res) => {
         let skipped = 0;
 
         for (const row of rows) {
-            const email =
-                row.email ||
-                row.Email ||
-                row["E-posta"] ||
-                row["Eposta"] ||
-                row["Mail"] ||
-                row["mail"];
+            const email = getValue(row, [
+                "E-posta",
+                "Eposta",
+                "Email",
+                "email",
+                "Mail",
+                "mail",
+                "E-mail",
+                "E-Mail",
+                "E-posta Adresi",
+            ]);
 
             if (!email) {
                 skipped++;
@@ -178,15 +223,20 @@ exports.importSubscribers = async (req, res) => {
                 continue;
             }
 
+            const language = getValue(row, ["Dil", "language", "Language"]) || "tr";
+            const status = getValue(row, ["Durum", "status", "Status"]) || "active";
+
             await Subscriber.create({
-                name: row.name || row.Name || row["Ad Soyad"] || row["İsim"] || "",
+                name: getValue(row, ["İsim", "Isim", "Ad Soyad", "Adı Soyadı", "name", "Name"]),
                 email: cleanEmail,
-                company: row.company || row.Company || row["Firma"] || "",
-                phone: row.phone || row.Phone || row["Telefon"] || "",
-                sector: row.sector || row.Sector || row["Sektör"] || "",
-                language: "tr",
+                company: getValue(row, ["Firma", "Şirket", "company", "Company"]),
+                phone: getValue(row, ["Telefon", "phone", "Phone"]),
+                sector: getValue(row, ["Sektör", "Sektor", "sector", "Sector"]),
+                language: String(language).toLowerCase() === "en" ? "en" : "tr",
+                status: ["active", "passive", "unsubscribed"].includes(String(status).toLowerCase())
+                    ? String(status).toLowerCase()
+                    : "active",
                 source: "import",
-                status: "active",
             });
 
             added++;
@@ -197,6 +247,7 @@ exports.importSubscribers = async (req, res) => {
             message: "İçe aktarma tamamlandı.",
             added,
             skipped,
+            totalRows: rows.length,
         });
     } catch (error) {
         res.status(500).json({
