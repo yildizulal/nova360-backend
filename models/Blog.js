@@ -77,6 +77,13 @@ const blogSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+
+        // null   => hemen yayın / normal yayın
+        // gelecek tarih => o tarih ve saat geldiğinde otomatik görünür
+        publishAt: {
+            type: Date,
+            default: null,
+        },
     },
     { timestamps: true }
 );

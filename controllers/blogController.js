@@ -14,12 +14,46 @@ const createSlug = (text) => {
         .replace(/[^\w-]+/g, "");
 };
 
+const publicVisibilityQuery = () => ({
+    published: true,
+    $or: [
+        { publishAt: null },
+        { publishAt: { $exists: false } },
+        { publishAt: { $lte: new Date() } },
+    ],
+});
+
+const getEffectivePublishDate = (blog) => {
+    return new Date(blog.publishAt || blog.createdAt).getTime();
+};
+
+const sortBlogs = (blogs) => {
+    return blogs.sort((a, b) => {
+        if (a.featured && !b.featured) return -1;
+        if (!a.featured && b.featured) return 1;
+        return getEffectivePublishDate(b) - getEffectivePublishDate(a);
+    });
+};
+
+const normalizePublishSettings = (payload) => {
+    const data = { ...payload };
+
+    if (data.publishAt === "" || data.publishAt === undefined) {
+        data.publishAt = null;
+    }
+
+    if (!data.published) {
+        data.publishAt = null;
+    }
+
+    return data;
+};
+
 exports.createBlog = async (req, res) => {
     try {
         const { title } = req.body;
 
         const slug = createSlug(title.tr);
-
         const existingBlog = await Blog.findOne({ slug });
 
         if (existingBlog) {
@@ -29,14 +63,20 @@ exports.createBlog = async (req, res) => {
             });
         }
 
+        const data = normalizePublishSettings(req.body);
+
         const blog = await Blog.create({
-            ...req.body,
+            ...data,
             slug,
         });
 
         res.status(201).json({
             success: true,
-            message: "Blog başarıyla oluşturuldu.",
+            message: blog.publishAt && new Date(blog.publishAt) > new Date()
+                ? "Blog planlandı. Belirlenen tarih ve saatte otomatik yayınlanacak."
+                : blog.published
+                    ? "Blog başarıyla oluşturuldu ve yayınlandı."
+                    : "Blog taslak olarak kaydedildi.",
             blog,
         });
     } catch (error) {
@@ -48,12 +88,11 @@ exports.createBlog = async (req, res) => {
     }
 };
 
+// Public: yalnızca şu anda yayında olması gereken blogları döndürür.
 exports.getBlogs = async (req, res) => {
     try {
-        const blogs = await Blog.find().sort({
-            featured: -1,
-            createdAt: -1,
-        });
+        const blogs = await Blog.find(publicVisibilityQuery());
+        sortBlogs(blogs);
 
         res.status(200).json({
             success: true,
@@ -69,11 +108,60 @@ exports.getBlogs = async (req, res) => {
     }
 };
 
+// Admin: taslak + planlı + yayındaki tüm bloglar.
+exports.getAdminBlogs = async (req, res) => {
+    try {
+        const blogs = await Blog.find().sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: blogs.length,
+            blogs,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Bloglar alınırken hata oluştu.",
+            error: error.message,
+        });
+    }
+};
+
+// Public detail: taslak veya zamanı gelmemiş planlı içerik dışarıdan açılamaz.
 exports.getSingleBlog = async (req, res) => {
     try {
         const blog = await Blog.findOne({
             slug: req.params.slug,
+            ...publicVisibilityQuery(),
         });
+
+        if (!blog) {
+            return res.status(404).json({
+                success: false,
+                message: "Blog bulunamadı veya henüz yayında değil.",
+            });
+        }
+
+        blog.views += 1;
+        await blog.save();
+
+        res.status(200).json({
+            success: true,
+            blog,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Blog alınırken hata oluştu.",
+            error: error.message,
+        });
+    }
+};
+
+// Admin edit ekranı için; görüntülenme sayısını artırmaz.
+exports.getAdminSingleBlog = async (req, res) => {
+    try {
+        const blog = await Blog.findOne({ slug: req.params.slug });
 
         if (!blog) {
             return res.status(404).json({
@@ -81,9 +169,6 @@ exports.getSingleBlog = async (req, res) => {
                 message: "Blog bulunamadı.",
             });
         }
-
-        blog.views += 1;
-        await blog.save();
 
         res.status(200).json({
             success: true,
@@ -109,9 +194,11 @@ exports.updateBlog = async (req, res) => {
             });
         }
 
+        const data = normalizePublishSettings(req.body);
+
         const updatedBlog = await Blog.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            data,
             {
                 new: true,
                 runValidators: true,
@@ -120,7 +207,11 @@ exports.updateBlog = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: "Blog başarıyla güncellendi.",
+            message: updatedBlog.publishAt && new Date(updatedBlog.publishAt) > new Date()
+                ? "Blog güncellendi ve planlanan yayın tarihi kaydedildi."
+                : updatedBlog.published
+                    ? "Blog başarıyla güncellendi."
+                    : "Blog taslak olarak güncellendi.",
             blog: updatedBlog,
         });
     } catch (error) {
