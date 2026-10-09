@@ -8,6 +8,7 @@ const {
     getAdminSingleBlog,
     deleteBlog,
     updateBlog,
+    getBlogSitemap,
 } = require("../controllers/blogController");
 
 const { protect } = require("../middleware/authMiddleware");
@@ -19,6 +20,7 @@ router.get("/admin/all", protect, getAdminBlogs);
 router.get("/admin/:slug", protect, getAdminSingleBlog);
 
 // Public route'lar yalnızca yayında olan içerikleri döndürür.
+router.get("/sitemap.xml", getBlogSitemap);
 router.get("/", getBlogs);
 router.get("/:slug", getSingleBlog);
 
