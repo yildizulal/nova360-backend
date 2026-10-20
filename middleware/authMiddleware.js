@@ -5,15 +5,12 @@ exports.protect = async (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
 
-        console.log("Gelen Authorization:", authHeader);
-
         let token;
 
         if (authHeader && authHeader.startsWith("Bearer")) {
             token = authHeader.replace("Bearer", "").trim();
         }
 
-        console.log("Ayrılan token:", token);
         console.log("Token parça sayısı:", token?.split(".").length);
 
         if (!token) {

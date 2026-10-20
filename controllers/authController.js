@@ -101,39 +101,55 @@ exports.loginAdmin = async (req, res) => {
 
 exports.updateAdminPassword = async (req, res) => {
     try {
-        const { email, newPassword } = req.body;
+        const { currentPassword, newPassword } = req.body;
 
-        if (!email || !newPassword) {
+        if (
+            typeof currentPassword !== "string" ||
+            typeof newPassword !== "string" ||
+            !currentPassword ||
+            newPassword.length < 12
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Email ve yeni şifre zorunludur.",
+                message: "Mevcut şifre ve en az 12 karakterlik yeni şifre gerekli.",
             });
         }
 
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        const user = await User.findById(req.user._id);
 
-        const user = await User.findOneAndUpdate(
-            { email },
-            { password: hashedPassword },
-            { new: true }
+        if (!user || user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Yetkisiz işlem.",
+            });
+        }
+
+        const isCorrect = await bcrypt.compare(
+            currentPassword,
+            user.password
         );
 
-        if (!user) {
-            return res.status(404).json({
+        if (!isCorrect) {
+            return res.status(401).json({
                 success: false,
-                message: "Kullanıcı bulunamadı.",
+                message: "Mevcut şifre yanlış.",
             });
         }
 
-        res.status(200).json({
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
+
+        return res.status(200).json({
             success: true,
-            message: "Admin şifresi güncellendi.",
+            message: "Admin şifresi başarıyla değiştirildi.",
         });
+
     } catch (error) {
-        res.status(500).json({
+        console.error("Şifre değiştirme hatası:", error);
+
+        return res.status(500).json({
             success: false,
-            message: "Şifre güncellenirken hata oluştu.",
-            error: error.message,
+            message: "Şifre değiştirilirken hata oluştu.",
         });
     }
 };
